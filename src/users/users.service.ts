@@ -6,15 +6,14 @@ import { CreateUserAdminDto, CreateUserDto, UpdateUserDto } from '@/users/dto/us
 import * as bcrypt from 'bcrypt';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthDto } from '@/auth/dto/auth.dto';
-
-
-
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UsersService {
     constructor(
         @InjectRepository(User)
         private readonly userRepository: Repository<User>,
+        private readonly configService: ConfigService,
     ) {}
 
     async create(createUserDto: CreateUserDto): Promise<Object> {
@@ -123,6 +122,24 @@ export class UsersService {
         }
         return {
             message: 'Usuario eliminado exitosamente',
+        }
+    }
+
+    async createInitialUsers(): Promise<void> {
+        const baseUser = await this.userRepository.findOne({ where: { username: 'user' } });
+        if (!baseUser) {
+            await this.create({
+                username: 'user',
+                password: this.configService.get<string>('BASE_USER_PASSWORD'),
+            });
+        }
+
+        const adminUser = await this.userRepository.findOne({ where: { username: 'admin' } });
+        if (!adminUser) {
+            await this.createAdmin({
+                username: 'admin',
+                password: this.configService.get<string>('BASE_ADMIN_PASSWORD'),
+            });
         }
     }
 }

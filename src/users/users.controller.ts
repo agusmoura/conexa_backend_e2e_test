@@ -7,8 +7,9 @@ import { JwtAuthGuard } from '@/auth/jwt-auth.guard';
 import { RolesGuard } from '@/users/roles.guard';
 import { User } from '@/users/users.entity';
 import { Response as ExpressResponse} from 'express';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('users')
 @Controller('users')
 export class UsersController {
     constructor(private readonly userService: UsersService) {}
