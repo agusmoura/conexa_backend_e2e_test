@@ -59,7 +59,14 @@ describe('MoviesService', () => {
                 MoviesService,
                 {
                     provide: getRepositoryToken(Movie),
-                    useClass: Repository,
+                    useValue: {
+                        find: jest.fn(),
+                        findOne: jest.fn(),
+                        create: jest.fn(),
+                        save: jest.fn(),
+                        remove: jest.fn(),
+                        preload: jest.fn(), // Añadir esta línea
+                    },
                 },
                 {
                     provide: StarWarsService,
@@ -96,6 +103,13 @@ describe('MoviesService', () => {
                 data: mockMovies,
             });
         });
+
+        it('debería devolver un error 404 si no hay películas', async () => {
+            jest.spyOn(movieRepository, 'find').mockResolvedValue([]);
+
+            await expect(service.findAll()).rejects.toThrow(NotFoundException);
+            await expect(service.findAll()).rejects.toThrowError('No se encontraron películas');
+        });
     });
 
     describe('findOne', () => {
@@ -118,6 +132,7 @@ describe('MoviesService', () => {
 
     describe('create', () => {
         it('debería crear una nueva película', async () => {
+            jest.spyOn(movieRepository, 'findOne').mockResolvedValue(null);
             jest.spyOn(movieRepository, 'create').mockReturnValue(mockMovie);
             jest.spyOn(movieRepository, 'save').mockResolvedValue(mockMovie);
 
@@ -130,6 +145,7 @@ describe('MoviesService', () => {
 
         it('debería lanzar ConflictException si la película ya existe', async () => {
             jest.spyOn(movieRepository, 'findOne').mockResolvedValue({ id: 1, title: 'Existing Movie' } as Movie);
+            jest.spyOn(movieRepository, 'create').mockReturnValue({ title: 'Existing Movie' } as Movie);
 
             await expect(service.create({ title: 'Existing Movie' } as Movie)).rejects.toThrow(ConflictException);
         });
@@ -139,6 +155,7 @@ describe('MoviesService', () => {
         it('debería actualizar una película existente', async () => {
             const updatedMovie = { ...mockMovie, title: 'Updated Movie' };
             jest.spyOn(movieRepository, 'findOne').mockResolvedValue(mockMovie);
+            jest.spyOn(movieRepository, 'preload').mockResolvedValue(updatedMovie);
             jest.spyOn(movieRepository, 'save').mockResolvedValue(updatedMovie);
 
             const result = await service.update(2, updatedMovie);

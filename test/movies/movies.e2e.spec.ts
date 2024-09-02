@@ -47,184 +47,211 @@ describe('MoviesController (e2e)', () => {
         await app.close();
     });
 
-    /* -------- Success Tests -------- */
+    describe('GET /movies', () => {
+        it('debería obtener una lista de películas', async () => {
+            const response = await request(app.getHttpServer())
+                .get('/movies')
+                .expect(200);
 
-    it('/movies (GET) (ALL) - deberia obtener una lista de peliculas', async () => {
-        const response = await request(app.getHttpServer())
-            .get('/movies')
-            .expect(200);
+            expect(response.body).toEqual({
+                message: 'Películas obtenidas exitosamente',
+                data: expect.any(Array)
+            });
+        });
 
-        expect(response.body).toEqual({
-            message: 'Películas obtenidas exitosamente',
-            data: expect.any(Array)
+        it('debería devolver un error 404 al intentar obtener una película inexistente', async () => {
+            const respuesta = await request(app.getHttpServer())
+                .get('/movies/PeliculaInexistente')
+                .set('Authorization', `Bearer ${userToken}`)
+                .expect(404);
+
+            expect(respuesta.body).toEqual({
+                statusCode: 404,
+                message: 'Película no encontrada',
+                error: 'Not Found'
+            });
         });
     });
 
+    describe('POST /movies', () => {
+        it('debería crear una nueva película (ADMIN)', async () => {
+            const movie: Movie = {
+                id: 1,
+                title: 'Pelicula de prueba',
+                episode_id: 1,
+                opening_crawl: 'Esta es una pelicula de prueba',
+                director: 'Director de prueba',
+                producer: 'Productor de prueba',
+                release_date: new Date(),
+                url: 'https://swapi.dev/api/films/1/',
+                characters: [],
+                planets: [],
+                starships: [],
+                vehicles: [],
+                species: [],
+                created_at: new Date(),
+                updated_at: new Date(),
+                deleted_at: null,
+                poster: null,
+            };
 
-    it('/movies (POST) (ADMIN) - deberia crear una nueva pelicula', async () => {
-        const movie: Movie = {
-            id: 1,
-            title: 'Pelicula de prueba',
-            episode_id: 1,
-            opening_crawl: 'Esta es una pelicula de prueba',
-            director: 'Director de prueba',
-            producer: 'Productor de prueba',
-            release_date: new Date(),
-            url: 'https://swapi.dev/api/films/1/',
-            characters: [],
-            planets: [],
-            starships: [],
-            vehicles: [],
-            species: [],
-            created_at: new Date(),
-            updated_at: new Date(),
-            deleted_at: null,
-            poster: null,
-        };
+            const response = await request(app.getHttpServer())
+                .post('/movies')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send(movie)
+                .expect(201);
 
-        const response = await request(app.getHttpServer())
-            .post('/movies')
-            .set('Authorization', `Bearer ${adminToken}`)
-            .send(movie)
-            .expect(201);
+            expect(response.body).toEqual({
+                message: 'Película creada exitosamente',
+                data: expect.any(Object)
+            });
+        });
 
-        expect(response.body).toEqual({
-            message: 'Película creada exitosamente',
-            data: expect.any(Object)
+        it('debería devolver un error 403 al intentar crear una película sin permisos de administrador (USER)', async () => {
+            const peliculaNueva: Partial<Movie> = {
+                title: 'Película no autorizada',
+                episode_id: 999,
+                opening_crawl: 'Esta película no debería crearse',
+                director: 'Usuario sin permisos',
+                producer: 'Usuario sin permisos',
+                release_date: new Date(),
+            };
+
+            const respuesta = await request(app.getHttpServer())
+                .post('/movies')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send(peliculaNueva)
+                .expect(403);
+
+            expect(respuesta.body).toEqual({
+                statusCode: 403,
+                message: 'Forbidden resource',
+                error: 'Forbidden'
+            });
+        });
+
+        it('debería devolver un error 400 al intentar crear una película con datos inválidos (ADMIN)', async () => {
+            const peliculaInvalida = {
+                title: '',
+                episode_id: 'no es un número',
+            };
+
+            const respuesta = await request(app.getHttpServer())
+                .post('/movies')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send(peliculaInvalida)
+                .expect(400);
+
+            expect(respuesta.body).toEqual({
+                statusCode: 400,
+                message: 'Error al crear la película: la sintaxis de entrada no es válida para tipo integer: «no es un número»',
+                error: 'Bad Request'
+            });
         });
     });
 
-    it('/movies (PUT) (ADMIN) - deberia actualizar una pelicula existente', async () => {
-        const movie: Movie = {
-            id: 1,
-            title: 'Pelicula de prueba',
-            episode_id: 1,
-            opening_crawl: 'Esta es una pelicula de prueba',
-            director: 'Director de prueba',
-            producer: 'Productor de prueba',
-            release_date: new Date(),
-            url: 'https://swapi.dev/api/films/1/',
-            poster: null,
-            characters: [],
-            planets: [],
-            starships: [],
-            vehicles: [],
-            species: [],
-            created_at: new Date(),
-            updated_at: new Date(),
-            deleted_at: null,
-        };
+    describe('PUT /movies/:id', () => {
+        it('debería actualizar una película existente (ADMIN)', async () => {
+            const movie: Movie = {
+                id: 1,
+                title: 'Pelicula de prueba',
+                episode_id: 1,
+                opening_crawl: 'Esta es una pelicula de prueba',
+                director: 'Director de prueba',
+                producer: 'Productor de prueba',
+                release_date: new Date(),
+                url: 'https://swapi.dev/api/films/1/',
+                poster: null,
+                characters: [],
+                planets: [],
+                starships: [],
+                vehicles: [],
+                species: [],
+                created_at: new Date(),
+                updated_at: new Date(),
+                deleted_at: null,
+            };
 
-        const response = await request(app.getHttpServer())
-            .put('/movies/1')
-            .set('Authorization', `Bearer ${adminToken}`)
-            .send(movie)
-            .expect(200);
+            const response = await request(app.getHttpServer())
+                .put('/movies/1')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send(movie)
+                .expect(200);
 
-        expect(response.body).toEqual({
-            message: 'Película actualizada exitosamente',
-            data: expect.any(Object)
+            expect(response.body).toEqual({
+                message: 'Película actualizada exitosamente',
+                data: expect.any(Object)
+            });
+        });
+
+        it('debería devolver un error 404 al intentar actualizar una película inexistente (ADMIN)', async () => {
+            const peliculaActualizada: Partial<Movie> = {
+                title: 'Película actualizada',
+                director: 'Director actualizado',
+            };
+
+            const respuesta = await request(app.getHttpServer())
+                .put('/movies/9999')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send(peliculaActualizada)
+                .expect(404);
+
+            expect(respuesta.body).toEqual({
+                statusCode: 404,
+                message: 'Película no encontrada',
+                error: 'Not Found'
+            });
         });
     });
 
-    it('/movies (DELETE) (ADMIN) - debería eliminar una película existente', async () => {
-        const response = await request(app.getHttpServer())
-            .delete('/movies/1')
-            .set('Authorization', `Bearer ${adminToken}`)
-            .expect(204);
+    describe('DELETE /movies/:id', () => {
+        it('debería eliminar una película existente (ADMIN)', async () => {
+            const response = await request(app.getHttpServer())
+                .delete('/movies/1')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .expect(204);
 
-        expect(response.body).toEqual({});
-    });
+            expect(response.body).toEqual({});
+        });
 
-    /* -------- Error Tests -------- */
+        it('debería devolver un error 403 al intentar eliminar una película sin permisos de administrador (USER)', async () => {
+            const respuesta = await request(app.getHttpServer())
+                .delete('/movies/1')
+                .set('Authorization', `Bearer ${userToken}`)
+                .expect(403);
 
-    it('/movies (POST) (USER) - debería devolver un error 403 al intentar crear una película sin permisos de administrador', async () => {
-        const peliculaNueva: Partial<Movie> = {
-            title: 'Película no autorizada',
-            episode_id: 999,
-            opening_crawl: 'Esta película no debería crearse',
-            director: 'Usuario sin permisos',
-            producer: 'Usuario sin permisos',
-            release_date: new Date(),
-        };
-
-        const respuesta = await request(app.getHttpServer())
-            .post('/movies')
-            .set('Authorization', `Bearer ${userToken}`)
-            .send(peliculaNueva)
-            .expect(403);
-
-
-        expect(respuesta.body).toEqual({
-            statusCode: 403,
-            message: 'Forbidden resource',
-            error: 'Forbidden'
+            expect(respuesta.body).toEqual({
+                statusCode: 403,
+                message: 'Forbidden resource',
+                error: 'Forbidden'
+            });
         });
     });
 
-    it('/movies (PUT) (ADMIN) - debería devolver un error 404 al intentar actualizar una película inexistente', async () => {
-        const peliculaActualizada: Partial<Movie> = {
-            title: 'Película actualizada',
-            director: 'Director actualizado',
-        };
+    describe('POST /movies/sync', () => {
+        it('debería sincronizar las películas exitosamente (ADMIN)', async () => {
+            const response = await request(app.getHttpServer())
+                .post('/movies/sync')
+                .set('Authorization', `Bearer ${adminToken}`)
+                .expect(200);
 
-        const respuesta = await request(app.getHttpServer())
-            .put('/movies/9999')
-            .set('Authorization', `Bearer ${adminToken}`)
-            .send(peliculaActualizada)
-            .expect(404);
+            expect(response.body).toEqual({
+                message: 'Listado de películas sincronizado exitosamente'
+            });
+        });
 
-        expect(respuesta.body).toEqual({
-            statusCode: 404,
-            message: 'Película no encontrada',
-            error: 'Not Found'
+        it('debería devolver un error 403 al intentar sincronizar las películas sin permisos de administrador (USER)', async () => {
+            const respuesta = await request(app.getHttpServer())
+                .post('/movies/sync')
+                .set('Authorization', `Bearer ${userToken}`)
+                .expect(403);
+
+            expect(respuesta.body).toEqual({
+                statusCode: 403,
+                message: 'Forbidden resource',
+                error: 'Forbidden'
+            });
         });
     });
-
-    it('/movies (DELETE) (USER) - debería devolver un error 403 al intentar eliminar una película sin permisos de administrador', async () => {
-        const respuesta = await request(app.getHttpServer())
-            .delete('/movies/1')
-            .set('Authorization', `Bearer ${userToken}`)
-            .expect(403);
-
-        expect(respuesta.body).toEqual({
-            statusCode: 403,
-            message: 'Forbidden resource',
-            error: 'Forbidden'
-        });
-    });
-
-    it('/movies (GET) (USER) - debería devolver un error 404 al intentar obtener una película inexistente', async () => {
-        const respuesta = await request(app.getHttpServer())
-            .get('/movies/PeliculaInexistente')
-            .set('Authorization', `Bearer ${userToken}`)
-            .expect(404);
-
-        expect(respuesta.body).toEqual({
-            statusCode: 404,
-            message: 'Película no encontrada',
-            error: 'Not Found'
-        });
-    });
-
-    it('/movies (POST) (ADMIN) - debería devolver un error 400 al intentar crear una película con datos inválidos', async () => {
-        const peliculaInvalida = {
-            title: '',
-            episode_id: 'no es un número',
-        };
-
-        const respuesta = await request(app.getHttpServer())
-            .post('/movies')
-            .set('Authorization', `Bearer ${adminToken}`)
-            .send(peliculaInvalida)
-            .expect(400);
-
-        expect(respuesta.body).toEqual({
-            statusCode: 400,
-            message: 'Error al crear la película: la sintaxis de entrada no es válida para tipo integer: «no es un número»',
-            error: 'Bad Request'
-        });
-    });
-
 });
 

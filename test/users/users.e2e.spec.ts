@@ -2,266 +2,199 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, Logger } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '@/app.module';
-import { CreateUserDto , UpdateUserDto} from '@/users/dto/users.dto';
+import { CreateUserDto, UpdateUserDto } from '@/users/dto/users.dto';
 import { DataSource } from 'typeorm';
 import { UsersService } from '@/users/users.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('UsersController (e2e)', () => {
     let app: INestApplication;
     let adminToken: string;
-    let dataSource: DataSource;
+    let userToken: string;
+    let configService: ConfigService;
+    let usersService: UsersService;
 
     beforeAll(async () => {
-      const moduleFixture: TestingModule = await Test.createTestingModule({
-        imports: [AppModule],
-      }).compile();
+        const moduleFixture: TestingModule = await Test.createTestingModule({
+            imports: [AppModule],
+        }).compile();
 
-      app = moduleFixture.createNestApplication();
-      await app.init();
-      dataSource = app.get(DataSource);
-    });
+        configService = moduleFixture.get<ConfigService>(ConfigService);
+        usersService = moduleFixture.get<UsersService>(UsersService);
 
-    afterAll(async () => {
-      await dataSource.dropDatabase();
-      await app.close();
-    });
+        app = moduleFixture.createNestApplication();
+        await app.init();
+        app.useLogger(new Logger());
 
-    beforeEach(async () => {
-      const moduleFixture: TestingModule = await Test.createTestingModule({
-        imports: [AppModule],
-      }).compile();
-
-      app = moduleFixture.createNestApplication();
-      await app.init();
-      app.useLogger(new Logger());
-
-      /* crear un usuario admin para la pruebas */
-      const user: CreateUserDto = {
-        username: 'admin',
-        password: 'admin',
-      };
-
-      const userService = app.get(UsersService);
-      await userService.createAdmin(user);
-
-      /* hacer login para obtener el token */
-      const loginResponse = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ username: 'admin', password: 'admin' })
-        .expect(200);
-
-      adminToken = loginResponse.body.access_token;
-    });
-
-    afterAll(async () => {
-      const dataSource = app.get(DataSource);
-      await dataSource.synchronize(true);
-      await app.close();
-    });
-
-    /* -------- Success Tests -------- */
-
-
-    it('/users (POST) - deberia crear un nuevo usuario', async () => {
-      try {
-        const user: CreateUserDto = {
-          username: 'testuser',
-          password: 'testpass'
+        // Crear usuario admin y obtener token
+        const adminCredentials = {
+            username: configService.get<string>('BASE_ADMIN_USERNAME'),
+            password: configService.get<string>('BASE_ADMIN_PASSWORD')
         };
 
-        const response = await request(app.getHttpServer())
-          .post('/users')
-          .send(user)
-          .expect(201);
+        const loginAdminResponse = await request(app.getHttpServer())
+            .post('/auth/login')
+            .send(adminCredentials)
+            .expect(200);
+        adminToken = loginAdminResponse.body.access_token;
 
-        expect(response.body).toEqual({
-          id: expect.any(Number),
-          username: 'testuser',
-          role: 'user',
-          message: 'Usuario creado exitosamente'
+        // Crear usuario normal y obtener token
+        const userCredentials = {
+            username: configService.get<string>('BASE_USER_USERNAME'),
+            password: configService.get<string>('BASE_USER_PASSWORD')
+        };
+
+        const loginUserResponse = await request(app.getHttpServer())
+            .post('/auth/login')
+            .send(userCredentials)
+            .expect(200);
+        userToken = loginUserResponse.body.access_token;
+    });
+
+    afterAll(async () => {
+        const dataSource = app.get(DataSource);
+        await dataSource.dropDatabase();
+        await app.close();
+    });
+
+    describe('POST /users', () => {
+        it('debería crear un nuevo usuario', async () => {
+            const user: CreateUserDto = {
+                username: 'newtestuser',
+                password: 'testpass'
+            };
+
+            const response = await request(app.getHttpServer())
+                .post('/users')
+                .send(user)
+                .expect(201);
+
+            expect(response.body).toEqual({
+                id: expect.any(Number),
+                username: 'newtestuser',
+                role: 'user',
+                message: 'Usuario creado exitosamente'
+            });
         });
-      } catch (error) {
-        console.error('Test error:', error);
-        throw error;
-      }
-    });
 
-    it('/users (GET) - deberia obtener todos los usuarios - (ADMIN)', async () => {
-      try {
-        const response = await request(app.getHttpServer())
-          .get('/users')
-          .set('Authorization', `Bearer ${adminToken}`)
-          .expect(200);
+        it('debería devolver un error 409 al intentar crear un usuario que ya existe', async () => {
+            const existingUser: CreateUserDto = {
+                username: configService.get<string>('BASE_USER_USERNAME'),
+                password: 'somepassword'
+            };
 
-        expect(Array.isArray(response.body)).toBe(true);
-        expect(response.body.length).toBeGreaterThan(0);
-      } catch (error) {
-        console.error('Test error:', error);
-        throw error;
-      }
-    });
-
-    it('/users/:id (PUT) - deberia actualizar un usuario - (ADMIN)', async () => {
-        try {
-            const user: CreateUserDto = {
-                username: 'testuser',
-                password: 'testpass'
-              };
-              
-              const createResponse = await request(app.getHttpServer())
+            const response = await request(app.getHttpServer())
                 .post('/users')
-                .send(user)
-                .expect(201);
+                .send(existingUser)
+                .expect(409);
 
-            const updateUser: UpdateUserDto = {
-                username: 'updateduser',
-                password: 'updatedpass'
-              };
+            expect(response.body).toEqual({
+                statusCode: 409,
+                message: 'El usuario ya existe',
+                error: 'Conflict'
+            });
+        });
+    });
 
-            const updateResponse = await request(app.getHttpServer())
-                .put(`/users/${createResponse.body.id}`)
-                .send(updateUser)
+    describe('GET /users', () => {
+        it('debería obtener todos los usuarios (ADMIN)', async () => {
+            const response = await request(app.getHttpServer())
+                .get('/users')
                 .set('Authorization', `Bearer ${adminToken}`)
                 .expect(200);
 
-            expect(updateResponse.body).toEqual({
-                id: createResponse.body.id,
-                username: 'updateduser',
-                message: 'Usuario actualizado exitosamente'
-            });
-        } catch (error) {
-            console.error('Test error:', error);
-            throw error;
-        }
-    });
+            expect(Array.isArray(response.body)).toBe(true);
+            expect(response.body.length).toBeGreaterThan(0);
+        });
 
-    it('/users/:id (DELETE) - deberia eliminar un usuario - (ADMIN)', async () => {
-        try {
-            const user: CreateUserDto = {
-                username: 'testuser',
-                password: 'testpass'
-              };
-              
-            const createResponse = await request(app.getHttpServer())
-                .post('/users')
-                .send(user)
-                .expect(201);
-
-
-            const deleteResponse = await request(app.getHttpServer())
-                .delete(`/users/${createResponse.body.id}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .expect(200);
-
-            expect(deleteResponse.body).toEqual({
-                message: 'Usuario eliminado exitosamente'
-            });
-        } catch (error) {
-            console.error('Test error:', error);
-            throw error;
-        }
-    });
-
-    /* -------- Error Tests -------- */
-
-    it('/users (GET) - deberia retornar un error 401 si no se proporciona un token', async () => {
-        try {
-            await request(app.getHttpServer())
-              .get('/users')
-              .expect(401);
-        } catch (error) {
-            console.error('Test error:', error);
-            throw error;
-        }
-    });
-
-    it('/users (GET) - deberia retornar un error 403 si el token no es valido', async () => {
-        try {
-            await request(app.getHttpServer())
-              .get('/users')
-              .set('Authorization', `Bearer invalidtoken`)
-              .expect(401);
-        } catch (error) {
-            console.error('Test error:', error);
-            throw error;
-        }
-    });
-
-    it('/users (GET) - deberia retornar un error 403 si el token no tiene el rol de admin', async () => {
-        try {
-            const user: CreateUserDto = {
-                username: 'testuser',
-                password: 'testpass'
-              };
-              
-            const createResponse = await request(app.getHttpServer())
-                .post('/users')
-                .send(user)
-                .expect(201);
-
-            const loginResponse = await request(app.getHttpServer())
-                .post('/auth/login')
-                .send({ username: 'testuser', password: 'testpass' })
-                .expect(200);
-
-            const userToken = loginResponse.body.access_token;
-
-            await request(app.getHttpServer())
+        it('debería devolver un error 403 al intentar obtener usuarios sin ser admin', async () => {
+            const response = await request(app.getHttpServer())
                 .get('/users')
                 .set('Authorization', `Bearer ${userToken}`)
                 .expect(403);
-        } catch (error) {
-            console.error('Test error:', error);
-            throw error;
-        }
+
+            expect(response.body).toEqual({
+                statusCode: 403,
+                message: 'Forbidden resource',
+                error: 'Forbidden'
+            });
+        });
     });
 
-    it('/users (GET) - deberia retornar un error 404 si el usuario no existe', async () => {
-        try {
-            const nonExistentUserId = 99999;
-
-            await request(app.getHttpServer())
-                .get(`/users/${nonExistentUserId}`)
-                .set('Authorization', `Bearer ${adminToken}`)
-                .expect(404);
-        } catch (error) {
-            console.error('Test error:', error);
-            throw error;
-        }
-    });
-
-    it('/users (PUT) - deberia retornar un error 404 si el usuario no existe', async () => {
-        try {
-            const nonExistentUserId = 99999;
-
+    describe('PUT /users/:id', () => {
+        it('debería actualizar un usuario existente (ADMIN)', async () => {
             const updateUser: UpdateUserDto = {
                 username: 'updateduser',
                 password: 'updatedpass'
-              };
+            };
 
-            await request(app.getHttpServer())
-                .put(`/users/${nonExistentUserId}`)
+            const response = await request(app.getHttpServer())
+                .put(`/users/2`)
+                .send(updateUser)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .expect(200);
+
+            expect(response.body).toEqual({
+                id: 2,
+                username: 'updateduser',
+                message: 'Usuario actualizado exitosamente'
+            });
+        });
+
+        it('debería devolver un error 404 al intentar actualizar un usuario inexistente', async () => {
+            const updateUser: UpdateUserDto = {
+                username: 'nonexistentuser',
+                password: 'somepassword'
+            };
+
+            const response = await request(app.getHttpServer())
+                .put('/users/9999')
                 .send(updateUser)
                 .set('Authorization', `Bearer ${adminToken}`)
                 .expect(404);
-        } catch (error) {
-            console.error('Test error:', error);
-            throw error;
-        }
+
+            expect(response.body).toEqual({
+                statusCode: 404,
+                message: 'Usuario no encontrado',
+                error: 'Not Found'
+            });
+        });
     });
 
-    it('/users (DELETE) - deberia retornar un error 404 si el usuario no existe', async () => {
-        try {
-            const nonExistentUserId = 99999;
+    describe('DELETE /users/:id', () => {
+        it('debería eliminar un usuario existente (ADMIN)', async () => {
+          /* crea un usuario temporal */
+          const tempUser: CreateUserDto = {
+            username: 'tempuser',
+            password: 'temppass'
+          };
 
-            await request(app.getHttpServer())
-                .delete(`/users/${nonExistentUserId}`)
+          const createResponse = await request(app.getHttpServer())
+            .post('/users')
+            .send(tempUser)
+            .expect(201);
+
+          const response = await request(app.getHttpServer())
+            .delete(`/users/${createResponse.body.id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .expect(200);
+
+            expect(response.body).toEqual({
+                message: 'Usuario eliminado exitosamente'
+            });
+        });
+
+        it('debería devolver un error 404 al intentar eliminar un usuario inexistente', async () => {
+            const response = await request(app.getHttpServer())
+                .delete('/users/9999')
                 .set('Authorization', `Bearer ${adminToken}`)
                 .expect(404);
-        } catch (error) {
-            console.error('Test error:', error);
-            throw error;
-        }
-    });
 
+            expect(response.body).toEqual({
+                statusCode: 404,
+                message: 'Usuario no encontrado',
+                error: 'Not Found'
+            });
+        });
+    });
 });

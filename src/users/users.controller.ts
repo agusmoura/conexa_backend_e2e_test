@@ -1,7 +1,7 @@
 import { Controller, HttpStatus, Get, Post, Delete, Put, Body, Param, UseGuards, Res } from '@nestjs/common';
-import { UsersService } from '@/users/users.service';
-import { CreateUserDto, UpdateUserDto } from '@/users/dto/users.dto';
-import { Roles } from '@/users/roles.decorator';
+import { UsersService } from './users.service';
+import { CreateUserDto, UpdateUserDto } from './dto/users.dto';
+import { Roles } from './roles.decorator';
 import { UserRole } from '@/users/users.entity';
 import { JwtAuthGuard } from '@/auth/jwt-auth.guard';
 import { RolesGuard } from '@/users/roles.guard';

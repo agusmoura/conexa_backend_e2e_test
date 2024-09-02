@@ -102,6 +102,7 @@ export class MoviesController {
     @ApiBody({ type: MovieDto })
     @ApiResponse({ status: 201, description: 'Película creada exitosamente' })
     @ApiResponse({ status: 400, description: 'Error en la creación de la película' })
+    @ApiResponse({ status: 409, description: 'Ya existe una película con este título' })
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN)

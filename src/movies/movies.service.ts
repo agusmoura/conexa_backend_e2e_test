@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException , BadRequestException} from '@nestjs/common';
+import { Injectable, NotFoundException , BadRequestException, ConflictException} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Movie } from './movies.entity';
@@ -89,24 +89,29 @@ export class MoviesService {
     }
 
     async create(movieDto: MovieDto): Promise<Object> {
+        const existingMovie = await this.movieRepository.findOne({ where: { title: movieDto.title } });
+        if (existingMovie) {
+            throw new ConflictException('Ya existe una película con este título');
+        }
+
         const movie = this.movieRepository.create(movieDto);
     
         const errors = await validate(movie);
         if (errors.length > 0) {
-          const errorMessages = errors.map(error => Object.values(error.constraints)).flat();
-          throw new BadRequestException(errorMessages);
+            const errorMessages = errors.map(error => Object.values(error.constraints)).flat();
+            throw new BadRequestException(errorMessages);
         }
     
         try {
-        const savedMovie = await this.movieRepository.save(movie);
-        return {
-            message: 'Película creada exitosamente',
-            data: this.toDto(savedMovie),
-        }
+            const savedMovie = await this.movieRepository.save(movie);
+            return {
+                message: 'Película creada exitosamente',
+                data: this.toDto(savedMovie),
+            }
         } catch (error) {
-          throw new BadRequestException('Error al crear la película: ' + error.message);
+            throw new BadRequestException('Error al crear la película: ' + error.message);
         }
-      }
+    }
 
     async update(id: number, movieDto: MovieDto): Promise<Object> {
         const movie = await this.movieRepository.preload({ id, ...this.toEntity(movieDto) });

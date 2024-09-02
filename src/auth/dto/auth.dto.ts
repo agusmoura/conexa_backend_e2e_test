@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
-export class AuthDto {
+export class LoginDto {
     @ApiProperty({
         description: 'Nombre de usuario',
         example: 'usuario123',
@@ -76,4 +76,12 @@ export class ChangePasswordDto {
 export interface JwtPayload {
     username: string;
 }
+
+export interface LoginResponseDto {
+    access_token: string;
+    token_type: string;
+    expires_in: number;
+    message: string;
+}
+
 

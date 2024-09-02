@@ -3,9 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserRole } from '@/users/users.entity';
 import { CreateUserAdminDto, CreateUserDto, UpdateUserDto } from '@/users/dto/users.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { UnauthorizedException } from '@nestjs/common';
-import { AuthDto } from '@/auth/dto/auth.dto';
+import { LoginDto } from '@/auth/dto/auth.dto';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -59,8 +59,8 @@ export class UsersService {
     }
     
 
-    async validateUser(authDto: AuthDto): Promise<User | null> {
-        const { username, password } = authDto;
+    async validateUser(LoginDto: LoginDto): Promise<User | null> {
+        const { username, password } = LoginDto;
         const user = await this.userRepository.findOne({ where: { username } });
         if (!user) {
             throw new UnauthorizedException('Credenciales inválidas');
@@ -113,6 +113,7 @@ export class UsersService {
 
     async remove(id: number): Promise<Object> {
         const user = await this.userRepository.findOne({ where: { id } });
+        
         if (!user) {
             throw new NotFoundException('Usuario no encontrado');
         }
@@ -126,19 +127,31 @@ export class UsersService {
     }
 
     async createInitialUsers(): Promise<void> {
-        const baseUser = await this.userRepository.findOne({ where: { username: 'user' } });
+        const baseUser = await this.userRepository.findOne({ where: { username: this.configService.get<string>('BASE_USER_USERNAME') } });
         if (!baseUser) {
             await this.create({
-                username: 'user',
+                username: this.configService.get<string>('BASE_USER_USERNAME'),
                 password: this.configService.get<string>('BASE_USER_PASSWORD'),
             });
         }
 
-        const adminUser = await this.userRepository.findOne({ where: { username: 'admin' } });
+        const adminUser = await this.userRepository.findOne({ where: { username: this.configService.get<string>('BASE_ADMIN_USERNAME') } });
         if (!adminUser) {
             await this.createAdmin({
-                username: 'admin',
+                username: this.configService.get<string>('BASE_ADMIN_USERNAME'),
                 password: this.configService.get<string>('BASE_ADMIN_PASSWORD'),
+            });
+        }
+    }
+
+    async createBaseUser() {
+        const baseUserExists = await this.findOneByUsername(this.configService.get('BASE_USER_USERNAME'));
+        if (!baseUserExists) {
+            const hashedPassword = await bcrypt.hash(this.configService.get('BASE_USER_PASSWORD'), 10);
+            await this.create({
+                username: this.configService.get('BASE_USER_USERNAME'),
+                password: hashedPassword,
+                role: UserRole.USER
             });
         }
     }
